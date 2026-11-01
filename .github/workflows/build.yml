@@ -32,7 +32,7 @@ jobs:
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           AJAR=$(ls $ANDROID_HOME/platforms/*/android.jar | sort -V | tail -1)
           mkdir out dexout
-          javac -source 8 -target 8 -Xlint:-options -cp "$AJAR" -d out TrainerBridge.java MpClient.java MpMenu.java
+          javac -source 8 -target 8 -Xlint:-options -cp "$AJAR" -d out TrainerBridge.java MpClient.java MpMenu.java MpServer.java
           rm -f out/com/gtavsource/android/TrainerBridge*.class
           "$BT/d8" --min-api 26 --lib "$AJAR" --output dexout $(find out -name '*.class')
           mkdir result
