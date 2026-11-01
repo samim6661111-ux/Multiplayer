@@ -1,0 +1,45 @@
+name: build-mp
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1) smali / baksmali (needs JDK 11)
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '11' }
+      - name: Build smali tools
+        run: |
+          git clone --depth 1 https://github.com/google/smali smali-src
+          cd smali-src
+          ./gradlew --no-daemon smali:fatJar baksmali:fatJar
+          cp smali/build/libs/*fat.jar ../smali.jar
+          cp baksmali/build/libs/*fat.jar ../baksmali.jar
+
+      # 2) hook MpMenu into GameMenuActivity.onResume
+      - name: Patch classes.dex
+        run: |
+          java -jar baksmali.jar d classes.dex -o smali_out
+          python3 patch.py smali_out/com/gtavsource/android/GameMenuActivity.smali
+          java -jar smali.jar a smali_out --api 26 -o classes_patched.dex
+
+      # 3) compile MpClient + MpMenu to classes2.dex
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Build classes2.dex
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          AJAR=$(ls $ANDROID_HOME/platforms/*/android.jar | sort -V | tail -1)
+          mkdir out dexout
+          javac -source 8 -target 8 -Xlint:-options -cp "$AJAR" -d out TrainerBridge.java MpClient.java MpMenu.java
+          rm -f out/com/gtavsource/android/TrainerBridge*.class
+          "$BT/d8" --min-api 26 --lib "$AJAR" --output dexout $(find out -name '*.class')
+          mkdir result
+          mv dexout/classes.dex result/classes2.dex
+          mv classes_patched.dex result/classes.dex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mp-dex
+          path: result/
